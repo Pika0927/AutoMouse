@@ -9,17 +9,17 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Shapes;
+using FirstFloor.ModernUI.Windows.Controls;
 
-namespace AutoMouseMVVM
+namespace AutoMouseMVVM.Views
 {
     /// <summary>
-    /// MainWindow.xaml 的互動邏輯
+    /// ShellView.xaml 的互動邏輯
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class ShellView : ModernWindow
     {
-        public MainWindow()
+        public ShellView()
         {
             InitializeComponent();
         }

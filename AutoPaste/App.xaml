@@ -1,21 +1,19 @@
-﻿<Application x:Class="AutoMouseMVVM.App"
+﻿<Application x:Class="AutoPaste.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:AutoMouseMVVM"
-             xmlns:View="clr-namespace:AutoMouseMVVM.Views"
-             StartupUri="/Views/ShellView.xaml">
+             xmlns:local="clr-namespace:AutoPaste"
+            StartupUri="/ShellView.xaml">
     <Application.Resources>
         <ResourceDictionary>
             <!-- WPF 4.0 workaround -->
             <Style TargetType="{x:Type Rectangle}" />
             <!-- end of workaround -->
             <ResourceDictionary.MergedDictionaries>
-               
+
                 <ResourceDictionary Source="/FirstFloor.ModernUI;component/Assets/ModernUI.xaml" />
                 <ResourceDictionary Source="/FirstFloor.ModernUI;component/Assets/ModernUI.Dark.xaml"/>
                 <ResourceDictionary Source="/FirstFloor.ModernUI;component/Assets/ModernWindowStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
-    
 </Application>
