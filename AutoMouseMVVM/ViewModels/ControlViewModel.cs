@@ -23,6 +23,8 @@ using System.ComponentModel;
 using AutoMouseMVVM.Functions;
 using AutoMouseMVVM.Helper;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace AutoMouseMVVM.ViewModels
 {
@@ -37,8 +39,12 @@ namespace AutoMouseMVVM.ViewModels
         KeyboardHook k_hook = new KeyboardHook();
         Record ListBoxRecord = new Record("ListBoxRecord");
         string FilePath;
+        string ConfigPath = "Config.txt";
+        System.Drawing.Point ReloadPos = new System.Drawing.Point(0, 0);
+        System.Drawing.Point FAPos = new System.Drawing.Point(0, 0);
 
         static List<string> PosAndTime;
+        static List<string> Config;
         [System.Runtime.InteropServices.DllImport("user32")]
         private static extern int mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
         const int MOUSEEVENTF_MOVE = 0x0001;
@@ -171,6 +177,17 @@ namespace AutoMouseMVVM.ViewModels
             }
         }
 
+        private string _PosColorStr = "";
+        public string PosColorStr
+        {
+            get { return _PosColorStr; }
+            set
+            {
+                _PosColorStr = value;
+                OnPropertyChanged();
+            }
+        }
+
         #endregion
 
 
@@ -204,16 +221,14 @@ namespace AutoMouseMVVM.ViewModels
             DeletePath = new DelegateCommand(_DeletePath, ICommandReturnTrue);
             k_hook.KeyDownEvent += new SWF.KeyEventHandler(hook_KeyDown);
             k_hook.Start();
-            
+
             MouseHook.MouseAction += new EventHandler(MouseClickEvent);
         }
         private void MouseClickEvent(object sender, EventArgs e)
         {
-            // Console.WriteLine(PosColor.ToString());
             if (IsAutoPaste && PosColor.ToString().ToUpper() == "#FFFFFFFF")
             {
-                Thread T1 = new Thread(ClickAfterFewTime);
-                T1.Start();
+                Task.Factory.StartNew(() => ClickAfterFewTime());
             }
         }
         private bool IsClickWait = false;
@@ -224,9 +239,9 @@ namespace AutoMouseMVVM.ViewModels
                 return;
             }
             IsClickWait = true;
-            Thread.Sleep(150);
+            SpinWait.SpinUntil(() => false, 150);
             SWF.SendKeys.SendWait("^{a}");
-            Thread.Sleep(10);
+            SpinWait.SpinUntil(() => false, 10);
             SWF.SendKeys.SendWait("^{v}");
             IsClickWait = false;
         }
@@ -267,6 +282,7 @@ namespace AutoMouseMVVM.ViewModels
             PosX = SWF.Cursor.Position.X;
             PosY = SWF.Cursor.Position.Y;
             PosColor = new SolidColorBrush(GetColor(PosX, PosY));
+            PosColorStr = PosColor.ToString();
         }
         private System.Windows.Media.Color GetColor(int x, int y)
         {
@@ -310,9 +326,10 @@ namespace AutoMouseMVVM.ViewModels
                         FilePath = PathList[index].ToString();
                         Record PosFile = new Record(FilePath);
                         PosAndTime = PosFile.ReadRecordList();
+                        Record ConfigFile = new Record(ConfigPath);
+                        Config = ConfigFile.ReadRecordList();
 
-                        Thread thread = new Thread(run_mouse);
-                        thread.Start();
+                        Task.Factory.StartNew(() => run_mouse());
                     }
                 }
             }
@@ -351,93 +368,174 @@ namespace AutoMouseMVVM.ViewModels
                     keybd_event((byte)item, 0, 2, UIntPtr.Zero);
                 }
             }
-
         }
         #endregion
 
         #region RunMouse
         public void run_mouse()
         {
-            // 1 group include : rectangle's x1, y1, x2, y2, time
+            // 1 group include : rectangle's x1, y1, x2, y2, time, (option string => auto-reload)
             ExeNow = true;
-            int nowx, nowy;
-            int time;
-            string[] pos = new string[5];
+            double time;
+            List<string> pos = new List<string>();
             Random rnd = new Random(Guid.NewGuid().GetHashCode());
             if (PosAndTime.Count < 1)
             {
                 return;
             }
+            List<int> Reload = Config[0].Split(' ').Select(int.Parse).ToList();
+            List<int> FA = Config[1].Split(' ').Select(int.Parse).ToList();
+            List<int> Attack = Config[2].Split(' ').Select(int.Parse).ToList();
+            string TargetColor = Config[3];
+
+            int AttackCX = Attack[0];
+            int AttackCY = Attack[1];
+            while (true)
+            {
+                foreach (string item in PosAndTime)
+                {
+                    pos = item.Split(' ').ToList();
+
+                    if (pos.Count < 5 || pos[4] == "0")
+                    {
+                        time = 0;
+                    }
+                    else
+                    {
+                        time = rnd.Next((int)Math.Round(Convert.ToDouble(pos[4]) * 1000, 0), (int)Math.Round(Convert.ToDouble(pos[4]) * 1000, 0) + 500);
+                    }
+                    RndPath(item);
+                    if (time > 10000 && pos.Count > 5)
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+
+                        bool IsTargetColor = false;
+                        int ScanCount = 0;
+                        while (sw.ElapsedMilliseconds < time)
+                        {
+                            if (IsBreakCheck())
+                            {
+                                return;
+                            }
+                            ScanCount++;
+                            SpinWait.SpinUntil(() => false, 50);
+                            if (ScanCount == 4)
+                            {
+                                if (!IsTargetColor)
+                                {
+                                    IsTargetColor = !LineColorCheck(AttackCX, AttackCY, TargetColor);
+                                }
+                                else
+                                {
+                                    IsTargetColor = false;
+                                    if (time - sw.ElapsedMilliseconds > 5000)
+                                    {
+                                        SpinWait.SpinUntil(() => false, 200);
+                                        RndPath(Config[0]);
+                                        ScanCount = 0;
+                                        while (ScanCount < 50 && sw.ElapsedMilliseconds < time)
+                                        {
+                                            ScanCount++;
+                                            IsTargetColor = LineColorCheck(AttackCX, AttackCY, TargetColor);
+                                            if (IsTargetColor)
+                                            {
+                                                RndPath(Config[1]);
+                                                break;
+                                            }
+                                            if (IsBreakCheck())
+                                            {
+                                                return;
+                                            }
+
+                                            SpinWait.SpinUntil(() => false, 200);
+                                        }
+
+                                        IsTargetColor = false;
+                                    }
+                                }
+                                ScanCount = 0;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Stopwatch sw = Stopwatch.StartNew();
+                        while (sw.ElapsedMilliseconds < time)
+                        {
+                            if (IsBreakCheck())
+                            {
+                                return;
+                            }
+                            SpinWait.SpinUntil(() => false, 50);
+                        }
+                    }
+                }
+            }
+        }
+        public bool IsBreakCheck()
+        {
+            if (ExeBreak)
+            {
+                ExeBreak = false;
+                ExeNow = false;
+                return true;
+            }
+            return false;
+        }
+        public bool LineColorCheck(int X, int Y, string TargetColor)
+        {
+            SolidColorBrush NowColor;
+            for (int i = -5; i < 5; i++)
+            {
+                NowColor = new SolidColorBrush(GetColor(X + i, Y));
+                if (NowColor.ToString().ToUpper() == TargetColor)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        public void RndPath(string posline)
+        {
+            int nowx, nowy;
+            int orix, oriy;
+            Random rnd = new Random(Guid.NewGuid().GetHashCode());
+            List<string> pos = posline.Split(' ').ToList();
+            nowx = rnd.Next(Convert.ToInt32(pos[0]), Convert.ToInt32(pos[2]));
+            nowy = rnd.Next(Convert.ToInt32(pos[1]), Convert.ToInt32(pos[3]));
+
+            orix = SWF.Cursor.Position.X;
+            oriy = SWF.Cursor.Position.Y;
+            int recoupx = -1, recoupy = -1;
+            if (orix - nowx < 0)
+            {
+                recoupx = 1;
+            }
+            if (oriy - nowy < 0)
+            {
+                recoupy = 1;
+            }
 
             while (true)
             {
-                int orix;
-                int oriy;
-
-                foreach (string item in PosAndTime)
+                for (int k = 0; k < 200000; k++) ;
+                if (nowx != orix)
                 {
-                    pos = item.Split(' ');
-                    nowx = rnd.Next(Convert.ToInt32(pos[0]), Convert.ToInt32(pos[2]));
-                    nowy = rnd.Next(Convert.ToInt32(pos[1]), Convert.ToInt32(pos[3]));
-
-                   
-                    time = rnd.Next((int)Math.Round(Convert.ToDouble(pos[4]) * 1000,0), (int)Math.Round(Convert.ToDouble(pos[4]) * 1000, 0) + 500);
-
-                    orix = SWF.Cursor.Position.X;
-                    oriy = SWF.Cursor.Position.Y;
-                    int recoupx = -1, recoupy = -1;
-                    if (orix - nowx < 0)
-                    {
-                        recoupx = 1;
-                    }
-                    if (oriy - nowy < 0)
-                    {
-                        recoupy = 1;
-                    }
-
-                    while (true)
-                    {
-                        for (int k = 0; k < 200000; k++) ;
-                        if (nowx != orix)
-                        {
-                            orix += rnd.Next(2) * recoupx;
-                        }
-                        if (nowy != oriy)
-                        {
-                            oriy += rnd.Next(2) * recoupy;
-                        }
-
-                        SWF.Cursor.Position = new System.Drawing.Point(orix, oriy);
-                        if (orix == nowx && oriy == nowy)
-                        {
-                            break;
-                        }
-                    }
-                    mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-
-                    for (int j = 0; j < time / 50; j++)
-                    {
-                        if (ExeBreak)
-                        {
-                            ExeBreak = false;
-                            ExeNow = false;
-                            return;
-                        }
-                        Thread.Sleep(50);
-                    }
+                    orix += rnd.Next(2) * recoupx;
                 }
-                time = 500;
-                for (int j = 0; j < time / 50; j++)
+                if (nowy != oriy)
                 {
-                    if (ExeBreak)
-                    {
-                        ExeBreak = false;
-                        ExeNow = false;
-                        return;
-                    }
-                    Thread.Sleep(50);
+                    oriy += rnd.Next(2) * recoupy;
+                }
+
+                SWF.Cursor.Position = new System.Drawing.Point(orix, oriy);
+                if (orix == nowx && oriy == nowy)
+                {
+                    break;
                 }
             }
+            mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+
         }
         #endregion
 

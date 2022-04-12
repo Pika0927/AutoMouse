@@ -20,7 +20,10 @@
             <Label x:Name="LB1" Content="{Binding PosX}" Width="25"></Label>
             <Label Content="Y " Margin="15,0,0,0"></Label>
             <Label x:Name="LB2" Content="{Binding PosY}" Width="25"></Label>
-            <Border Height="10" Width="80" Margin="10,0,0,0" Background="{Binding PosColor}"></Border>
+            <StackPanel>
+                <Border Height="10" Width="80" Margin="10,0,0,0" Background="{Binding PosColor}"></Border>
+                <Label Content="{Binding PosColorStr}" Margin="10,0,0,0"></Label>
+            </StackPanel>
             <Label Content="AutoPaste" Margin="20,0,0,0"></Label>
             <Ellipse Height="12" Width="12" Fill="{Binding AutoPasteState}" Margin="5,0,0,0"></Ellipse>
         </StackPanel >
