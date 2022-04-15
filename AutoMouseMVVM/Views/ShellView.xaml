@@ -5,7 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mui="http://firstfloorsoftware.com/ModernUI" 
         Title="F6:AutoPaste F7:Color F8:Pos F9:Stop" 
-        IsTitleVisible="True"
         mc:Ignorable="d"
         Height="300" Width="330"      
         ContentSource ="/Views/ControlView.xaml"

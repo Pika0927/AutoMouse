@@ -25,6 +25,7 @@ using AutoMouseMVVM.Helper;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using CsAutoGui;
 
 namespace AutoMouseMVVM.ViewModels
 {
@@ -37,14 +38,16 @@ namespace AutoMouseMVVM.ViewModels
         static bool ExeNow = false;
         static bool ExeBreak = false;
         KeyboardHook k_hook = new KeyboardHook();
-        Record ListBoxRecord = new Record("ListBoxRecord");
+        Record ListBoxRecord = new Record(@"data\ListBoxRecord");
         string FilePath;
-        string ConfigPath = "Config.txt";
+        string ConfigPath = @"data\Config.txt";
         System.Drawing.Point ReloadPos = new System.Drawing.Point(0, 0);
         System.Drawing.Point FAPos = new System.Drawing.Point(0, 0);
-
+        AutoGui AG = new AutoGui();
         static List<string> PosAndTime;
         static List<string> Config;
+
+
         [System.Runtime.InteropServices.DllImport("user32")]
         private static extern int mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
         const int MOUSEEVENTF_MOVE = 0x0001;
@@ -190,7 +193,6 @@ namespace AutoMouseMVVM.ViewModels
 
         #endregion
 
-
         #region ICommand
         private bool ICommandReturnTrue(object param)
         {
@@ -329,10 +331,12 @@ namespace AutoMouseMVVM.ViewModels
                         Record ConfigFile = new Record(ConfigPath);
                         Config = ConfigFile.ReadRecordList();
 
-                        Task.Factory.StartNew(() => run_mouse());
+                        Task.Factory.StartNew(() => RunScript());
                     }
                 }
             }
+            //Location Immpos = AG.LocateOnScreen(@"D:\windowslog.png", 0.9);
+            //SWF.Cursor.Position = new System.Drawing.Point(Immpos.centerX, Immpos.centerY);
         }
         bool SendLock = false;
         private void SendTextFunction()
@@ -345,6 +349,7 @@ namespace AutoMouseMVVM.ViewModels
             SWF.SendKeys.SendWait(SendText);
             SendLock = false;
         }
+        
         #region KeyBoardSimulation
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
@@ -372,7 +377,7 @@ namespace AutoMouseMVVM.ViewModels
         #endregion
 
         #region RunMouse
-        public void run_mouse()
+        public void RunScript()
         {
             // 1 group include : rectangle's x1, y1, x2, y2, time, (option string => auto-reload)
             ExeNow = true;
@@ -495,6 +500,11 @@ namespace AutoMouseMVVM.ViewModels
             }
             return false;
         }
+        public void RndPathWithImg(string path)
+        {
+           Location Target = AG.LocateOnScreen(path, 0.9);
+
+        }
         public void RndPath(string posline)
         {
             int nowx, nowy;
@@ -503,7 +513,7 @@ namespace AutoMouseMVVM.ViewModels
             List<string> pos = posline.Split(' ').ToList();
             nowx = rnd.Next(Convert.ToInt32(pos[0]), Convert.ToInt32(pos[2]));
             nowy = rnd.Next(Convert.ToInt32(pos[1]), Convert.ToInt32(pos[3]));
-
+            
             orix = SWF.Cursor.Position.X;
             oriy = SWF.Cursor.Position.Y;
             int recoupx = -1, recoupy = -1;
