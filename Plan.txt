@@ -1,0 +1,15 @@
+Auto drink half-red
+-
+
+When need confrim then stop
+-detect
+
+a.png
+
+while
+-check a.png
+-wait 
+
+move
+click
+　

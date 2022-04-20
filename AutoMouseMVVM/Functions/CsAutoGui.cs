@@ -65,6 +65,9 @@ namespace CsAutoGui
         /// </summary>
         public int centerY;
 
+        public int Width;
+
+        public int Height;
         /// <summary>
         /// 构造函数
         /// </summary>
@@ -82,6 +85,8 @@ namespace CsAutoGui
             this.maxY = maxY;
             this.centerX = centerX;
             this.centerY = centerY;
+            this.Width = maxX-minX;
+            this.Height = maxY-minY;
         }
         /// <summary>
         /// Location是否为Null
@@ -702,7 +707,7 @@ namespace CsAutoGui
         /// <param name="imgPath">截图的地址</param>
         /// <param name="threshold">相似度，默认为1，建议为0.9</param>
         /// <returns>坐标信息的结构体</returns>
-        public Location LocateOnScreen(string imgPath, double threshold = 1)
+        public Location LocateOnScreen(string imgPath, double threshold = 1, int SrcWidth = -1, int SrcHeight = -1, int StartX = -1, int StartY = -1)
         {
             //防故障检测
             if (this.FailSafe && this.Position().X == 0 && this.Position().Y == 0)
@@ -710,26 +715,26 @@ namespace CsAutoGui
                 Console.WriteLine("Fail");
                 throw new MyException("异常:防故障处理");
             }
-
-
+            SrcWidth = SrcWidth == -1 ? Screen.PrimaryScreen.Bounds.Width : SrcWidth;
+            SrcHeight = SrcHeight == -1 ? Screen.PrimaryScreen.Bounds.Height : SrcHeight;
+            StartX = StartX == -1 ? 0 : StartX;
+            StartY = StartY == -1 ? 0 : StartY;
             //创建图象，保存将来截取的图象
-            Bitmap imgSrc = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
+            Bitmap imgSrc = new Bitmap(SrcWidth, SrcHeight);
             Graphics imgGraphics = Graphics.FromImage(imgSrc);
             //设置截屏区域
-            imgGraphics.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size((int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Width), (int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Height)));
+            imgGraphics.CopyFromScreen(StartX, StartY, 0, 0, new System.Drawing.Size((int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Width), (int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Height)));
             //寻找位置的图片
             Bitmap imgSub = new Bitmap(imgPath);
             OpenCvSharp.Mat srcMat = null;
             OpenCvSharp.Mat dstMat = null;
             OpenCvSharp.OutputArray outArray = null;
-            Console.WriteLine(Screen.PrimaryScreen.Bounds.Width + "*" + Screen.PrimaryScreen.Bounds.Height);
             try
             {
                 srcMat = BitmapSourceConverter.ToMat(Convert(imgSrc));
                 dstMat = Cv2.ImRead(imgPath);
                 Cv2.CvtColor(dstMat, dstMat, ColorConversionCodes.RGB2GRAY);
                 Cv2.CvtColor(srcMat, srcMat, ColorConversionCodes.RGB2GRAY);
-
                 outArray = OpenCvSharp.OutputArray.Create(srcMat);
                 //开始匹配
                 OpenCvSharp.Cv2.MatchTemplate(srcMat, dstMat, outArray, TemplateMatchModes.CCoeffNormed);
@@ -737,13 +742,14 @@ namespace CsAutoGui
                 double minValue, maxValue;
                 OpenCvSharp.Point location, point;
                 OpenCvSharp.Cv2.MinMaxLoc(OpenCvSharp.InputArray.Create(outArray.GetMat()), out minValue, out maxValue, out location, out point);
+                Console.WriteLine($"Value : {maxValue}");
                 if (maxValue >= threshold)
                 {
                     return new Location(point.X, point.Y, point.X + imgSub.Width, point.Y + imgSub.Height, point.X + imgSub.Width / 2, point.Y + imgSub.Height / 2);
                 }
                 return new Location();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex);
                 Console.WriteLine(ex.Message);

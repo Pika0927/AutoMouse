@@ -46,6 +46,7 @@ namespace AutoMouseMVVM.ViewModels
         AutoGui AG = new AutoGui();
         static List<string> PosAndTime;
         static List<string> Config;
+        Dictionary<string, string> Cmds = new Dictionary<string, string>();
 
 
         [System.Runtime.InteropServices.DllImport("user32")]
@@ -221,9 +222,22 @@ namespace AutoMouseMVVM.ViewModels
             DTimer.Start();
             AddPath = new DelegateCommand(_AddPath, ICommandReturnTrue);
             DeletePath = new DelegateCommand(_DeletePath, ICommandReturnTrue);
+            Record ConfigFile = new Record(ConfigPath);
+            Config = ConfigFile.ReadRecordList();
+            foreach (var line in Config)
+            {
+                List<string> items = line.Split(' ').ToList();
+                switch (items[0])
+                {
+                    case "cmd":
+                        Cmds[items[1]] = @"data\" + items[1] + ".txt";
+                        break;
+                    default:
+                        break;
+                }
+            }
             k_hook.KeyDownEvent += new SWF.KeyEventHandler(hook_KeyDown);
             k_hook.Start();
-
             MouseHook.MouseAction += new EventHandler(MouseClickEvent);
         }
         private void MouseClickEvent(object sender, EventArgs e)
@@ -318,6 +332,13 @@ namespace AutoMouseMVVM.ViewModels
             {
                 IsAutoPaste = !IsAutoPaste;
             }
+            else if (e.KeyValue == (int)SWF.Keys.F2)
+            {
+                Location LocTmp = new Location();
+                LocTmp = AG.LocateOnScreen(@"data\s_90.png", 0.85);
+
+                Console.WriteLine(Loc2PosString(LocTmp));
+            }
             else if (SWF.Control.ModifierKeys == SWF.Keys.Alt)//Start
             {
                 int index = e.KeyValue - 48;
@@ -328,15 +349,12 @@ namespace AutoMouseMVVM.ViewModels
                         FilePath = PathList[index].ToString();
                         Record PosFile = new Record(FilePath);
                         PosAndTime = PosFile.ReadRecordList();
-                        Record ConfigFile = new Record(ConfigPath);
-                        Config = ConfigFile.ReadRecordList();
+
 
                         Task.Factory.StartNew(() => RunScript());
                     }
                 }
             }
-            //Location Immpos = AG.LocateOnScreen(@"D:\windowslog.png", 0.9);
-            //SWF.Cursor.Position = new System.Drawing.Point(Immpos.centerX, Immpos.centerY);
         }
         bool SendLock = false;
         private void SendTextFunction()
@@ -349,7 +367,7 @@ namespace AutoMouseMVVM.ViewModels
             SWF.SendKeys.SendWait(SendText);
             SendLock = false;
         }
-        
+
         #region KeyBoardSimulation
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
@@ -379,103 +397,183 @@ namespace AutoMouseMVVM.ViewModels
         #region RunMouse
         public void RunScript()
         {
-            // 1 group include : rectangle's x1, y1, x2, y2, time, (option string => auto-reload)
+            // 1 group include : rectangle's x1, y1, x2, y2, Time, (option string => auto-reload)
             ExeNow = true;
-            double time;
-            List<string> pos = new List<string>();
+            double Time = 0;
+            double PreTime = 0;
+            List<string> Pos = new List<string>();
             Random rnd = new Random(Guid.NewGuid().GetHashCode());
+            Location LocTmp;
+            bool EndBreak = false;  
+            int CheckState = 0;// 0:Normal  1:Check=Get  2:Check=None 
             if (PosAndTime.Count < 1)
             {
                 return;
             }
-            List<int> Reload = Config[0].Split(' ').Select(int.Parse).ToList();
-            List<int> FA = Config[1].Split(' ').Select(int.Parse).ToList();
-            List<int> Attack = Config[2].Split(' ').Select(int.Parse).ToList();
-            string TargetColor = Config[3];
 
-            int AttackCX = Attack[0];
-            int AttackCY = Attack[1];
             while (true)
             {
+                //Read command，command list write on Readme.txt
                 foreach (string item in PosAndTime)
                 {
-                    pos = item.Split(' ').ToList();
-
-                    if (pos.Count < 5 || pos[4] == "0")
+                    Pos = item.Split(' ').ToList();
+                    string PosString = "";
+                    bool IsFA = false;
+                    if (Pos[0] != "END" && CheckState == 2)
                     {
-                        time = 0;
+                        continue;
                     }
-                    else
+                    if (EndBreak)
                     {
-                        time = rnd.Next((int)Math.Round(Convert.ToDouble(pos[4]) * 1000, 0), (int)Math.Round(Convert.ToDouble(pos[4]) * 1000, 0) + 500);
+                        EndBreak = false;
+                        break;
                     }
-                    RndPath(item);
-                    if (time > 10000 && pos.Count > 5)
+                    switch (Pos[0])
                     {
-                        Stopwatch sw = Stopwatch.StartNew();
-
-                        bool IsTargetColor = false;
-                        int ScanCount = 0;
-                        while (sw.ElapsedMilliseconds < time)
-                        {
-                            if (IsBreakCheck())
+                        case "CHECK"://CHECK img_name
+                            LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
+                            if (LocTmp.IsNull())
                             {
+                                CheckState = 2;
+                            }
+                            else
+                            {
+                                CheckState = 1;
+                            }
+                            continue;
+
+                        case "END"://END + BREAK
+                            if (CheckState == 1 && Pos.Count > 1 && Pos[1] == "BREAK")
+                            {
+                                EndBreak = true;
+                            }
+                            else if(CheckState == 1 && Pos.Count > 1 && Pos[1] == "STOP")
+                            {
+                                ExeBreak = false;
+                                ExeNow = false;
                                 return;
                             }
-                            ScanCount++;
-                            SpinWait.SpinUntil(() => false, 50);
-                            if (ScanCount == 4)
+                            CheckState = 0;
+                            continue;
+
+                        case "P"://P x1 y1 x2 y2 Time + FA
+                            Time = Convert.ToDouble(Pos[5]);
+                            PosString = Cmd2PosString(item, 1);
+                            break;
+                        case "PIMG"://PIMG img_name PreTime Time + FA
+                            Time = Convert.ToDouble(Pos[3]);
+                            PreTime = Convert.ToDouble(Pos[2]);
+                            while (true)
                             {
-                                if (!IsTargetColor)
+                                LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
+                                if (!LocTmp.IsNull())
                                 {
-                                    IsTargetColor = !LineColorCheck(AttackCX, AttackCY, TargetColor);
+                                    PosString = Loc2PosString(LocTmp);
+                                    break;
                                 }
-                                else
+                                if (IsBreakCheck())
                                 {
-                                    IsTargetColor = false;
-                                    if (time - sw.ElapsedMilliseconds > 5000)
-                                    {
-                                        SpinWait.SpinUntil(() => false, 200);
-                                        RndPath(Config[0]);
-                                        ScanCount = 0;
-                                        while (ScanCount < 50 && sw.ElapsedMilliseconds < time)
-                                        {
-                                            ScanCount++;
-                                            IsTargetColor = LineColorCheck(AttackCX, AttackCY, TargetColor);
-                                            if (IsTargetColor)
-                                            {
-                                                RndPath(Config[1]);
-                                                break;
-                                            }
-                                            if (IsBreakCheck())
-                                            {
-                                                return;
-                                            }
-
-                                            SpinWait.SpinUntil(() => false, 200);
-                                        }
-
-                                        IsTargetColor = false;
-                                    }
+                                    return;
                                 }
-                                ScanCount = 0;
+                                SpinWait.SpinUntil(() => false, 200);
                             }
+                            break;
+                        case "PIMG2"://PIMG2 img_name1 img_name2 Time
+                            Time = Convert.ToDouble(Pos[3]);
+
+                            while (true)
+                            {
+                                LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.85);
+                                if (!LocTmp.IsNull())
+                                {
+                                    break;
+                                }
+                                if (IsBreakCheck())
+                                {
+                                    return;
+                                }
+                                SpinWait.SpinUntil(() => false, 200);
+                            }
+                            Location LocTmp2 = AG.LocateOnScreen(ImgName2Path(Pos[2]), 0.9, LocTmp.Width, LocTmp.Height, LocTmp.minX, LocTmp.minY);
+                            LocTmp2.maxX += LocTmp.minX;
+                            LocTmp2.minX += LocTmp.minX;
+                            LocTmp2.maxY += LocTmp.minY;
+                            LocTmp2.minY += LocTmp.minY;
+                            PosString = Loc2PosString(LocTmp2);
+                            break;
+                        case "PIMGP"://PIMGP img_name x1 y1 x2 y2 Time
+                            Time = Convert.ToDouble(Pos[6]);
+                            while (true)
+                            {
+                                LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.85);
+                                if (!LocTmp.IsNull())
+                                {
+                                    LocTmp.maxX = LocTmp.minX + Convert.ToInt32(Pos[4]);
+                                    LocTmp.maxY = LocTmp.minY + Convert.ToInt32(Pos[5]);
+                                    LocTmp.minX = LocTmp.minX + Convert.ToInt32(Pos[2]);
+                                    LocTmp.minY = LocTmp.minY + Convert.ToInt32(Pos[3]);
+                                    PosString = Loc2PosString(LocTmp);
+                                    break;
+                                }
+                                if (IsBreakCheck())
+                                {
+                                    return;
+                                }
+                                SpinWait.SpinUntil(() => false, 200);
+                            }
+                            break;
+                        case "KEY"://KEY paste Time
+                            Time = Convert.ToDouble(Pos[3]);
+                            PosString = "";
+                            if (Pos[1] == "paste")
+                            {
+                                ClickAfterFewTime();
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    Time = rnd.Next((int)Math.Round(Time * 1000, 0), (int)Math.Round(Time * 1000, 0) + 500);
+
+
+                    if (PosString != "")
+                    {
+                        if (!Waitting(PreTime))
+                        {
+                            return;
+                        }
+                        RndPath(PosString);
+                    }
+                    IsFA = Pos[Pos.Count - 1] == "FA";
+                    if (IsFA)
+                    {
+                        if (!AutoReload(Time))
+                        {
+                            return;
                         }
                     }
                     else
                     {
-                        Stopwatch sw = Stopwatch.StartNew();
-                        while (sw.ElapsedMilliseconds < time)
+                        if (!Waitting(Time))
                         {
-                            if (IsBreakCheck())
-                            {
-                                return;
-                            }
-                            SpinWait.SpinUntil(() => false, 50);
+                            return;
                         }
                     }
                 }
             }
+        }
+        public bool Waitting(double Time)
+        {
+            Stopwatch sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < Time)
+            {
+                if (IsBreakCheck())
+                {
+                    return false;
+                }
+                SpinWait.SpinUntil(() => false, 50);
+            }
+            return true;
         }
         public bool IsBreakCheck()
         {
@@ -487,23 +585,85 @@ namespace AutoMouseMVVM.ViewModels
             }
             return false;
         }
-        public bool LineColorCheck(int X, int Y, string TargetColor)
+        public bool AutoReload(double Time)
         {
-            SolidColorBrush NowColor;
-            for (int i = -5; i < 5; i++)
+            Stopwatch sw = Stopwatch.StartNew();
+
+            bool IsTarget = false;
+            int ScanCount = 0;
+            while (sw.ElapsedMilliseconds < Time)
             {
-                NowColor = new SolidColorBrush(GetColor(X + i, Y));
-                if (NowColor.ToString().ToUpper() == TargetColor)
+                if (IsBreakCheck())
                 {
-                    return true;
+                    return false;
+                }
+                ScanCount++;
+                SpinWait.SpinUntil(() => false, 50);
+                if (ScanCount == 4)
+                {
+                    if (!IsTarget)
+                    {
+                        IsTarget = AG.LocateOnScreen(ImgName2Path("attack"), 0.9).IsNull();
+                        if (!IsTarget && !AG.LocateOnScreen(ImgName2Path("ok"), 0.9).IsNull())
+                        {
+                            return true;    
+                        }
+                    }
+                    else
+                    {
+                        IsTarget = false;
+                        if (Time - sw.ElapsedMilliseconds > 1000)
+                        {
+                            SpinWait.SpinUntil(() => false, 200);
+                            Location TargetLoc = AG.LocateOnScreen(ImgName2Path("reload"), 0.9);
+                            RndPath(Loc2PosString(TargetLoc));
+                            ScanCount = 0;
+                            while (ScanCount < 50 && sw.ElapsedMilliseconds < Time)
+                            {
+                                ScanCount++;
+                                IsTarget = !AG.LocateOnScreen(ImgName2Path("attack"), 0.9).IsNull();
+                                if (!IsTarget && !AG.LocateOnScreen(ImgName2Path("ok"), 0.9).IsNull())
+                                {
+                                    return true;
+                                }
+                                if (IsTarget)
+                                {
+                                    TargetLoc = AG.LocateOnScreen(ImgName2Path("fa"), 0.9);
+                                    RndPath(Loc2PosString(TargetLoc));
+                                    break;
+                                }
+                                if (IsBreakCheck())
+                                {
+                                    return false;
+                                }
+
+                                SpinWait.SpinUntil(() => false, 200);
+                            }
+
+                            IsTarget = false;
+                        }
+                    }
+                    ScanCount = 0;
                 }
             }
-            return false;
+            return true;
         }
         public void RndPathWithImg(string path)
         {
-           Location Target = AG.LocateOnScreen(path, 0.9);
-
+            Location Target = AG.LocateOnScreen(path, 0.9);
+        }
+        public string Loc2PosString(Location Loc)
+        {
+            return Loc.minX.ToString() + " " + Loc.minY.ToString() + " " + Loc.maxX.ToString() + " " + Loc.maxY.ToString();
+        }
+        public string Cmd2PosString(string FullCmd, int StartIndex)
+        {
+            List<string> Cmd = FullCmd.Split(' ').ToList();
+            return Cmd[0 + StartIndex] + " " + Cmd[1 + StartIndex] + " " + Cmd[2 + StartIndex] + " " + Cmd[3 + StartIndex];
+        }
+        public string ImgName2Path(string ImgName)
+        {
+            return $@"data\{ImgName}.png";
         }
         public void RndPath(string posline)
         {
@@ -513,7 +673,7 @@ namespace AutoMouseMVVM.ViewModels
             List<string> pos = posline.Split(' ').ToList();
             nowx = rnd.Next(Convert.ToInt32(pos[0]), Convert.ToInt32(pos[2]));
             nowy = rnd.Next(Convert.ToInt32(pos[1]), Convert.ToInt32(pos[3]));
-            
+
             orix = SWF.Cursor.Position.X;
             oriy = SWF.Cursor.Position.Y;
             int recoupx = -1, recoupy = -1;
