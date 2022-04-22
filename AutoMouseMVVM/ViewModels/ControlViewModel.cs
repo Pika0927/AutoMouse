@@ -47,7 +47,8 @@ namespace AutoMouseMVVM.ViewModels
         static List<string> PosAndTime;
         static List<string> Config;
         Dictionary<string, string> Cmds = new Dictionary<string, string>();
-
+        Stopwatch CountDownSw = new Stopwatch();
+        Random rnd = new Random(Guid.NewGuid().GetHashCode());
 
         [System.Runtime.InteropServices.DllImport("user32")]
         private static extern int mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
@@ -335,7 +336,7 @@ namespace AutoMouseMVVM.ViewModels
             else if (e.KeyValue == (int)SWF.Keys.F2)
             {
                 Location LocTmp = new Location();
-                LocTmp = AG.LocateOnScreen(@"data\s_90.png", 0.85);
+                LocTmp = AG.LocateOnScreen(@"data\fa.png", 0.85);
 
                 Console.WriteLine(Loc2PosString(LocTmp));
             }
@@ -402,9 +403,8 @@ namespace AutoMouseMVVM.ViewModels
             double Time = 0;
             double PreTime = 0;
             List<string> Pos = new List<string>();
-            Random rnd = new Random(Guid.NewGuid().GetHashCode());
             Location LocTmp;
-            bool EndBreak = false;  
+            bool EndBreak = false;
             int CheckState = 0;// 0:Normal  1:Check=Get  2:Check=None 
             if (PosAndTime.Count < 1)
             {
@@ -413,6 +413,7 @@ namespace AutoMouseMVVM.ViewModels
 
             while (true)
             {
+                GC.Collect();
                 //Read command，command list write on Readme.txt
                 foreach (string item in PosAndTime)
                 {
@@ -447,7 +448,7 @@ namespace AutoMouseMVVM.ViewModels
                             {
                                 EndBreak = true;
                             }
-                            else if(CheckState == 1 && Pos.Count > 1 && Pos[1] == "STOP")
+                            else if (CheckState == 1 && Pos.Count > 1 && Pos[1] == "STOP")
                             {
                                 ExeBreak = false;
                                 ExeNow = false;
@@ -523,7 +524,7 @@ namespace AutoMouseMVVM.ViewModels
                             }
                             break;
                         case "KEY"://KEY paste Time
-                            Time = Convert.ToDouble(Pos[3]);
+                            Time = Convert.ToDouble(Pos[2]);
                             PosString = "";
                             if (Pos[1] == "paste")
                             {
@@ -533,7 +534,6 @@ namespace AutoMouseMVVM.ViewModels
                         default:
                             break;
                     }
-                    Time = rnd.Next((int)Math.Round(Time * 1000, 0), (int)Math.Round(Time * 1000, 0) + 500);
 
 
                     if (PosString != "")
@@ -564,8 +564,9 @@ namespace AutoMouseMVVM.ViewModels
         }
         public bool Waitting(double Time)
         {
-            Stopwatch sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < Time)
+            Time = rnd.Next((int)Math.Round(Time * 1000, 0), (int)Math.Round(Time * 1000, 0) + 500);
+            CountDownSw.Restart();
+            while (CountDownSw.ElapsedMilliseconds < Time)
             {
                 if (IsBreakCheck())
                 {
@@ -587,12 +588,14 @@ namespace AutoMouseMVVM.ViewModels
         }
         public bool AutoReload(double Time)
         {
-            Stopwatch sw = Stopwatch.StartNew();
+            CountDownSw.Restart();
+
 
             bool IsTarget = false;
             int ScanCount = 0;
-            while (sw.ElapsedMilliseconds < Time)
+            while (CountDownSw.ElapsedMilliseconds < Time)
             {
+
                 if (IsBreakCheck())
                 {
                     return false;
@@ -606,19 +609,19 @@ namespace AutoMouseMVVM.ViewModels
                         IsTarget = AG.LocateOnScreen(ImgName2Path("attack"), 0.9).IsNull();
                         if (!IsTarget && !AG.LocateOnScreen(ImgName2Path("ok"), 0.9).IsNull())
                         {
-                            return true;    
+                            return true;
                         }
                     }
                     else
                     {
                         IsTarget = false;
-                        if (Time - sw.ElapsedMilliseconds > 1000)
+                        if (Time - CountDownSw.ElapsedMilliseconds > 1000)
                         {
                             SpinWait.SpinUntil(() => false, 200);
                             Location TargetLoc = AG.LocateOnScreen(ImgName2Path("reload"), 0.9);
                             RndPath(Loc2PosString(TargetLoc));
                             ScanCount = 0;
-                            while (ScanCount < 50 && sw.ElapsedMilliseconds < Time)
+                            while (ScanCount < 50 && CountDownSw.ElapsedMilliseconds < Time)
                             {
                                 ScanCount++;
                                 IsTarget = !AG.LocateOnScreen(ImgName2Path("attack"), 0.9).IsNull();

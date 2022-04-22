@@ -85,8 +85,8 @@ namespace CsAutoGui
             this.maxY = maxY;
             this.centerX = centerX;
             this.centerY = centerY;
-            this.Width = maxX-minX;
-            this.Height = maxY-minY;
+            this.Width = maxX - minX;
+            this.Height = maxY - minY;
         }
         /// <summary>
         /// Location是否为Null
@@ -689,6 +689,7 @@ namespace CsAutoGui
         {
             return new System.Drawing.Point(location.centerX, location.centerY);
         }
+
         public static System.Windows.Media.Imaging.BitmapSource Convert(System.Drawing.Bitmap bitmap)
         {
             var hBitmap = bitmap.GetHbitmap();
@@ -698,7 +699,6 @@ namespace CsAutoGui
                                     IntPtr.Zero,
                                     Int32Rect.Empty,
                                     System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-
             return bitmapsource;
         }
         /// <summary>
@@ -707,6 +707,18 @@ namespace CsAutoGui
         /// <param name="imgPath">截图的地址</param>
         /// <param name="threshold">相似度，默认为1，建议为0.9</param>
         /// <returns>坐标信息的结构体</returns>
+        Bitmap imgSrc;
+        Graphics imgGraphics;
+        Bitmap imgSub;
+        Mat srcMat = null;
+        Mat dstMat = null;
+        Mat srcMatg = null;
+        Mat dstMatg = null;
+        Mat outArray = null;
+        OpenCvSharp.Point locationtmp;
+        OpenCvSharp.Point point;
+        System.Windows.Media.Imaging.BitmapSource BitSrc;
+
         public Location LocateOnScreen(string imgPath, double threshold = 1, int SrcWidth = -1, int SrcHeight = -1, int StartX = -1, int StartY = -1)
         {
             //防故障检测
@@ -720,33 +732,62 @@ namespace CsAutoGui
             StartX = StartX == -1 ? 0 : StartX;
             StartY = StartY == -1 ? 0 : StartY;
             //创建图象，保存将来截取的图象
-            Bitmap imgSrc = new Bitmap(SrcWidth, SrcHeight);
-            Graphics imgGraphics = Graphics.FromImage(imgSrc);
+            imgSrc = new Bitmap(SrcWidth, SrcHeight);
+            imgGraphics = Graphics.FromImage(imgSrc);
             //设置截屏区域
             imgGraphics.CopyFromScreen(StartX, StartY, 0, 0, new System.Drawing.Size((int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Width), (int)ConvertToNomalCooridate(Screen.PrimaryScreen.Bounds.Height)));
             //寻找位置的图片
-            Bitmap imgSub = new Bitmap(imgPath);
-            OpenCvSharp.Mat srcMat = null;
-            OpenCvSharp.Mat dstMat = null;
-            OpenCvSharp.OutputArray outArray = null;
+            imgSub = new Bitmap(imgPath);
+            srcMat = null;
+            dstMat = null;
+            outArray = null;
             try
             {
-                srcMat = BitmapSourceConverter.ToMat(Convert(imgSrc));
+                imgSrc.Save(@"data\screentmp.png");
                 dstMat = Cv2.ImRead(imgPath);
-                Cv2.CvtColor(dstMat, dstMat, ColorConversionCodes.RGB2GRAY);
-                Cv2.CvtColor(srcMat, srcMat, ColorConversionCodes.RGB2GRAY);
-                outArray = OpenCvSharp.OutputArray.Create(srcMat);
+                dstMatg = dstMat.CvtColor(ColorConversionCodes.RGB2GRAY);
+                srcMat = Cv2.ImRead(@"data\screentmp.png");
+                srcMatg = srcMat.CvtColor(ColorConversionCodes.RGB2GRAY);
+                outArray = srcMat;
                 //开始匹配
-                OpenCvSharp.Cv2.MatchTemplate(srcMat, dstMat, outArray, TemplateMatchModes.CCoeffNormed);
-
+                Cv2.MatchTemplate(srcMatg, dstMatg, outArray, TemplateMatchModes.CCoeffNormed);
                 double minValue, maxValue;
-                OpenCvSharp.Point location, point;
-                OpenCvSharp.Cv2.MinMaxLoc(OpenCvSharp.InputArray.Create(outArray.GetMat()), out minValue, out maxValue, out location, out point);
-                Console.WriteLine($"Value : {maxValue}");
-                if (maxValue >= threshold)
+                List<Location> locations = new List<Location>();
+                outArray.Threshold(threshold,1,OpenCvSharp.ThresholdTypes.Tozero);
+                while (true)
                 {
-                    return new Location(point.X, point.Y, point.X + imgSub.Width, point.Y + imgSub.Height, point.X + imgSub.Width / 2, point.Y + imgSub.Height / 2);
+                    Cv2.MinMaxLoc(InputArray.Create(outArray), out minValue, out maxValue, out locationtmp, out point);
+                    if (maxValue >= threshold)
+                    {
+                        locations.Add(new Location(point.X, point.Y, point.X + imgSub.Width, point.Y + imgSub.Height, point.X + imgSub.Width / 2, point.Y + imgSub.Height / 2));
+                        OpenCvSharp.Rect outRect;
+                        Cv2.FloodFill(outArray, point, new OpenCvSharp.Scalar(0), out outRect, new OpenCvSharp.Scalar(0.1),
+                                    new OpenCvSharp.Scalar(1.0), FloodFillFlags.Link4);
+
+                    }
+                    else
+                    {
+                        if (locations.Count > 0)
+                        {
+                            int LocIndex = 0;
+                            int MinY = int.MaxValue;
+                            for (int i = 0; i < locations.Count; i++)
+                            {
+                                if(locations[i].minY <= MinY)
+                                {
+                                    MinY = locations[i].minY;
+                                    LocIndex = i;
+                                }
+                            }
+                            return locations[LocIndex];
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
                 }
+
                 return new Location();
             }
             catch (Exception ex)
@@ -769,6 +810,11 @@ namespace CsAutoGui
                     dstMat.Dispose();
                 if (outArray != null)
                     outArray.Dispose();
+                if (srcMatg != null)
+                    srcMatg.Dispose();
+                if (dstMatg != null)
+                    dstMatg.Dispose();
+
             }
         }
 
