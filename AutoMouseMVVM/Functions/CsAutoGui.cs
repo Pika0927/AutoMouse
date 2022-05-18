@@ -763,7 +763,6 @@ namespace CsAutoGui
                         OpenCvSharp.Rect outRect;
                         Cv2.FloodFill(outArray, point, new OpenCvSharp.Scalar(0), out outRect, new OpenCvSharp.Scalar(0.1),
                                     new OpenCvSharp.Scalar(1.0), FloodFillFlags.Link4);
-
                     }
                     else
                     {

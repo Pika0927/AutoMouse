@@ -48,6 +48,7 @@ namespace AutoMouseMVVM.ViewModels
         static List<string> Config;
         Dictionary<string, string> Cmds = new Dictionary<string, string>();
         Stopwatch CountDownSw = new Stopwatch();
+        Stopwatch AllTimeSw = new Stopwatch();
         Random rnd = new Random(Guid.NewGuid().GetHashCode());
 
         [System.Runtime.InteropServices.DllImport("user32")]
@@ -405,6 +406,7 @@ namespace AutoMouseMVVM.ViewModels
             List<string> Pos = new List<string>();
             Location LocTmp;
             bool EndBreak = false;
+            int LoopLimit = -1;
             int CheckState = 0;// 0:Normal  1:Check=Get  2:Check=None 
             if (PosAndTime.Count < 1)
             {
@@ -414,23 +416,49 @@ namespace AutoMouseMVVM.ViewModels
             while (true)
             {
                 GC.Collect();
+                double AllTime = -1;
+                if (LoopLimit > 0)
+                {
+                    LoopLimit--;
+                    if (LoopLimit == 0)
+                    {
+                        return;
+                    }
+                }
                 //Read command，command list write on Readme.txt
                 foreach (string item in PosAndTime)
                 {
                     Pos = item.Split(' ').ToList();
                     string PosString = "";
                     bool IsFA = false;
+                    bool IsDClick = false;
                     if (Pos[0] != "END" && CheckState == 2)
                     {
                         continue;
                     }
                     if (EndBreak)
                     {
+                        if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                        {
+                            Location TargetLoc = AG.LocateOnScreen(ImgName2Path("reload"), 0.9);
+                            RndPath(Loc2PosString(TargetLoc));
+                            SpinWait.SpinUntil(() => false, 2000);
+                        }
                         EndBreak = false;
                         break;
                     }
                     switch (Pos[0])
                     {
+                        case "LOOP"://CHECK loop limit
+                            if (LoopLimit < 0)
+                            {
+                                LoopLimit = Convert.ToInt32(Pos[1]);
+                            }
+                            continue;
+                        case "TIME"://CHECK set all time
+                            AllTime = Convert.ToDouble(Pos[1]) * 1000;
+                            AllTimeSw.Restart();
+                            continue;
                         case "CHECK"://CHECK img_name
                             LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
                             if (LocTmp.IsNull())
@@ -461,12 +489,46 @@ namespace AutoMouseMVVM.ViewModels
                             Time = Convert.ToDouble(Pos[5]);
                             PosString = Cmd2PosString(item, 1);
                             break;
+                        case "PD"://P x1 y1 x2 y2 Time + FA
+                            Time = Convert.ToDouble(Pos[5]);
+                            PosString = Cmd2PosString(item, 1);
+                            IsDClick = true;
+                            break;
                         case "PIMG"://PIMG img_name PreTime Time + FA
                             Time = Convert.ToDouble(Pos[3]);
                             PreTime = Convert.ToDouble(Pos[2]);
                             while (true)
                             {
                                 LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
+                                if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                                {
+                                    EndBreak = true;
+                                    break;
+                                }
+                                if (!LocTmp.IsNull())
+                                {
+                                    PosString = Loc2PosString(LocTmp);
+                                    break;
+                                }
+                                if (IsBreakCheck())
+                                {
+                                    return;
+                                }
+                                Console.WriteLine(AllTime + " " + AllTimeSw.ElapsedMilliseconds);
+                                SpinWait.SpinUntil(() => false, 200);
+                            }
+                            break;
+                        case "PIMGD"://PIMG img_name PreTime Time + FA
+                            Time = Convert.ToDouble(Pos[3]);
+                            PreTime = Convert.ToDouble(Pos[2]);
+                            while (true)
+                            {
+                                LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
+                                if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                                {
+                                    EndBreak = true;
+                                    break;
+                                }
                                 if (!LocTmp.IsNull())
                                 {
                                     PosString = Loc2PosString(LocTmp);
@@ -478,6 +540,7 @@ namespace AutoMouseMVVM.ViewModels
                                 }
                                 SpinWait.SpinUntil(() => false, 200);
                             }
+                            IsDClick = true;
                             break;
                         case "PIMG2"://PIMG2 img_name1 img_name2 Time
                             Time = Convert.ToDouble(Pos[3]);
@@ -485,6 +548,11 @@ namespace AutoMouseMVVM.ViewModels
                             while (true)
                             {
                                 LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.85);
+                                if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                                {
+                                    EndBreak = true;
+                                    break;
+                                }
                                 if (!LocTmp.IsNull())
                                 {
                                     break;
@@ -507,6 +575,11 @@ namespace AutoMouseMVVM.ViewModels
                             while (true)
                             {
                                 LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.85);
+                                if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                                {
+                                    EndBreak = true;
+                                    break;
+                                }
                                 if (!LocTmp.IsNull())
                                 {
                                     LocTmp.maxX = LocTmp.minX + Convert.ToInt32(Pos[4]);
@@ -535,14 +608,18 @@ namespace AutoMouseMVVM.ViewModels
                             break;
                     }
 
-
+                    if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                    {
+                        EndBreak = true;
+                        continue;
+                    }
                     if (PosString != "")
                     {
                         if (!Waitting(PreTime))
                         {
                             return;
                         }
-                        RndPath(PosString);
+                        RndPath(PosString, IsDClick);
                     }
                     IsFA = Pos[Pos.Count - 1] == "FA";
                     if (IsFA)
@@ -588,6 +665,7 @@ namespace AutoMouseMVVM.ViewModels
         }
         public bool AutoReload(double Time)
         {
+            Time = rnd.Next((int)Math.Round(Time * 1000, 0), (int)Math.Round(Time * 1000, 0) + 500);
             CountDownSw.Restart();
 
 
@@ -668,7 +746,7 @@ namespace AutoMouseMVVM.ViewModels
         {
             return $@"data\{ImgName}.png";
         }
-        public void RndPath(string posline)
+        public void RndPath(string posline, bool IsDClick = false)
         {
             int nowx, nowy;
             int orix, oriy;
@@ -708,6 +786,11 @@ namespace AutoMouseMVVM.ViewModels
                 }
             }
             mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            if (IsDClick)
+            {
+                SpinWait.SpinUntil(() => false, 30);
+                mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            }
 
         }
         #endregion
