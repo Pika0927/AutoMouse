@@ -484,7 +484,26 @@ namespace AutoMouseMVVM.ViewModels
                             }
                             CheckState = 0;
                             continue;
-
+                        case "Until": //Until img_name
+                            while (true)
+                            {
+                                LocTmp = AG.LocateOnScreen(ImgName2Path(Pos[1]), 0.9);
+                                if (AllTime > 0 && AllTimeSw.ElapsedMilliseconds > AllTime)
+                                {
+                                    EndBreak = true;
+                                    break;
+                                }
+                                if (!LocTmp.IsNull())
+                                {
+                                    break;
+                                }
+                                if (IsBreakCheck())
+                                {
+                                    return;
+                                }
+                                SpinWait.SpinUntil(() => false, 200);
+                            }
+                            continue;
                         case "P"://P x1 y1 x2 y2 Time + FA
                             Time = Convert.ToDouble(Pos[5]);
                             PosString = Cmd2PosString(item, 1);
@@ -514,7 +533,6 @@ namespace AutoMouseMVVM.ViewModels
                                 {
                                     return;
                                 }
-                                Console.WriteLine(AllTime + " " + AllTimeSw.ElapsedMilliseconds);
                                 SpinWait.SpinUntil(() => false, 200);
                             }
                             break;
