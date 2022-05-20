@@ -51,6 +51,7 @@ namespace AutoMouseMVVM.ViewModels
         Stopwatch AllTimeSw = new Stopwatch();
         Random rnd = new Random(Guid.NewGuid().GetHashCode());
         bool IsShock = false;
+        bool IsShock2 = false;
 
         [System.Runtime.InteropServices.DllImport("user32")]
         private static extern int mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
@@ -328,22 +329,29 @@ namespace AutoMouseMVVM.ViewModels
             }
             else if (e.KeyValue == (int)SWF.Keys.F7)
             {
-                IsShock = !IsShock;
-                if (IsShock)
-                {
-                    Task.Factory.StartNew(() => Shock());
-                }
+                
             }
             else if (e.KeyValue == (int)SWF.Keys.F6)
             {
                 IsAutoPaste = !IsAutoPaste;
             }
+            else if (e.KeyValue == (int)SWF.Keys.F3)
+            {
+                IsShock = !IsShock;
+                IsShock2 = false;
+                if (IsShock)
+                {
+                    Task.Factory.StartNew(() => Shock());
+                }
+            }
             else if (e.KeyValue == (int)SWF.Keys.F2)
             {
-                Location LocTmp = new Location();
-                LocTmp = AG.LocateOnScreen(@"data\fa.png", 0.85);
-
-                Console.WriteLine(Loc2PosString(LocTmp));
+                IsShock2 = !IsShock2;
+                IsShock = false;
+                if (IsShock2)
+                {
+                    Task.Factory.StartNew(() => Shock2());
+                }
             }
             else if (SWF.Control.ModifierKeys == SWF.Keys.Alt)//Start
             {
@@ -415,6 +423,25 @@ namespace AutoMouseMVVM.ViewModels
                 else
                 {
                     SWF.Cursor.Position = new System.Drawing.Point(SWF.Cursor.Position.X - 1, SWF.Cursor.Position.Y);
+                }
+                IsShockRight = !IsShockRight;
+                SpinWait.SpinUntil(() => false, 50);
+            }
+        }
+        public void Shock2()
+        {
+            bool IsShockRight = false;
+
+            while (IsShock2)
+            {
+
+                if (IsShockRight)
+                {
+                    SWF.Cursor.Position = new System.Drawing.Point(SWF.Cursor.Position.X + 1, SWF.Cursor.Position.Y+1);
+                }
+                else
+                {
+                    SWF.Cursor.Position = new System.Drawing.Point(SWF.Cursor.Position.X - 1, SWF.Cursor.Position.Y-1);
                 }
                 IsShockRight = !IsShockRight;
                 SpinWait.SpinUntil(() => false, 50);
