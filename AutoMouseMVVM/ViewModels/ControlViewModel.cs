@@ -50,6 +50,7 @@ namespace AutoMouseMVVM.ViewModels
         Stopwatch CountDownSw = new Stopwatch();
         Stopwatch AllTimeSw = new Stopwatch();
         Random rnd = new Random(Guid.NewGuid().GetHashCode());
+        bool IsShock = false;
 
         [System.Runtime.InteropServices.DllImport("user32")]
         private static extern int mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
@@ -327,8 +328,11 @@ namespace AutoMouseMVVM.ViewModels
             }
             else if (e.KeyValue == (int)SWF.Keys.F7)
             {
-                SendText = PosColor.ToString();
-                SendStringToOtherWindow(SendText);
+                IsShock = !IsShock;
+                if (IsShock)
+                {
+                    Task.Factory.StartNew(() => Shock());
+                }
             }
             else if (e.KeyValue == (int)SWF.Keys.F6)
             {
@@ -392,6 +396,28 @@ namespace AutoMouseMVVM.ViewModels
                     keybd_event((byte)item, 0, 0, UIntPtr.Zero);
                     keybd_event((byte)item, 0, 2, UIntPtr.Zero);
                 }
+            }
+        }
+        #endregion
+
+        #region Let's Shock
+        public void Shock()
+        {
+            bool IsShockRight = false;
+
+            while (IsShock)
+            {
+
+                if (IsShockRight)
+                {
+                    SWF.Cursor.Position = new System.Drawing.Point(SWF.Cursor.Position.X + 1, SWF.Cursor.Position.Y);
+                }
+                else
+                {
+                    SWF.Cursor.Position = new System.Drawing.Point(SWF.Cursor.Position.X - 1, SWF.Cursor.Position.Y);
+                }
+                IsShockRight = !IsShockRight;
+                SpinWait.SpinUntil(() => false, 50);
             }
         }
         #endregion
